@@ -26,8 +26,21 @@ class QuickLookApp(QtWidgets.QMainWindow,app_ui.Ui_MainWindow):
         self.actionFullSize.triggered.connect(self.fullSizeImage)
         self.actionZoomIn.triggered.connect(self.zoomIn)
         self.actionZoomOut.triggered.connect(self.zoomOut)
-        self.actionRotate.triggered.connect(self.rotateImage)
+        self.actionRotate.triggered.connect(self.rotateImageDialog)
 
+        self.key_event_dict = {
+            ord('='):self.zoomIn,
+            ord('-'):self.zoomOut,
+            ord(','):lambda:self.rotateImage(-10),
+            ord('.'):lambda:self.rotateImage(10),
+            ord('0'):self.fitImageToView,
+            ord('1'):self.printScrollVals
+        }
+
+
+    def printScrollVals(self):
+        print(self.scrollArea.verticalScrollBar().value())
+        print(self.scrollArea.horizontalScrollBar().value())
 
     def loadFile(self,fname):
         self.pixmap = QtGui.QPixmap(fname)
@@ -37,9 +50,13 @@ class QuickLookApp(QtWidgets.QMainWindow,app_ui.Ui_MainWindow):
         self.imageLabel.setPixmap(self.pixmap)
         self.imageLabel.resize(self.pixmap.size())
 
-    def rotateImage(self):
+    def rotateImageDialog(self):
         dialog = RotateDialog()
-        self.total_rotation = dialog.getRotation()
+        self.total_rotation = 0
+        self.rotateImage(dialog.getRotation())
+
+    def rotateImage(self,degrees=90):
+        self.total_rotation += degrees
         rotate = QtGui.QTransform().rotate(self.total_rotation)
         self.curr_pixmap = self.pixmap.transformed(rotate)
         self.imageLabel.setPixmap(self.curr_pixmap)
@@ -49,6 +66,7 @@ class QuickLookApp(QtWidgets.QMainWindow,app_ui.Ui_MainWindow):
     def zoomIn(self):
         currSize = self.imageLabel.size()
         self.imageLabel.resize(currSize.width()*1.25,currSize.height()*1.25)
+
     def zoomOut(self):
         currSize = self.imageLabel.size()
         self.imageLabel.resize(currSize.width()*0.8,currSize.height()*0.8)
@@ -58,7 +76,11 @@ class QuickLookApp(QtWidgets.QMainWindow,app_ui.Ui_MainWindow):
 
     def fullSizeImage(self):
         self.imageLabel.resize(self.curr_pixmap.size())
-        
+
+    def keyPressEvent(self,e):
+        if e.modifiers() == QtCore.Qt.ControlModifier: 
+            if(e.key() in self.key_event_dict):
+                self.key_event_dict[e.key()]()
 if __name__ == '__main__':
     
     app = QtWidgets.QApplication(sys.argv)
