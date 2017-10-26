@@ -21,17 +21,20 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
             ord('.'):lambda:self.rotateImage(10),
             ord('0'):self.fitImageToView,
         }
-        '''
-
-        self.actionFitToView.triggered.connect(self.fitImageToView)
-        self.actionFullSize.triggered.connect(self.fullSizeImage)
+        self.actionOpen.triggered.connect(self.askFile)
         self.actionZoomIn.triggered.connect(self.zoomIn)
         self.actionZoomOut.triggered.connect(self.zoomOut)
-        self.actionRotate.triggered.connect(self.rotateImageDialog)
+        #self.actionRotate.triggered.connect(self.rotateImageDialog)
 
-        '''
+
+    def askFile(self):
+        fname,_ = QtWidgets.QFileDialog.getOpenFileName(self)
+        if(fname):
+            self.loadFile(fname)
 
     def loadFile(self,fname):
+        self.scene.clear()
+        self.graphicsView.viewport().update()
         self.pixmap = QtGui.QPixmap(fname)
         self.graphics_pixmap_item = QtWidgets.QGraphicsPixmapItem(self.pixmap)
         self.scene.addPixmap(self.pixmap)
