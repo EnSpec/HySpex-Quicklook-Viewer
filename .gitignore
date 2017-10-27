@@ -1,2 +1,3 @@
 *.jpeg
 __pycache__
+*.tiff
