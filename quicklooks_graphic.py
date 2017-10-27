@@ -20,10 +20,19 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
             ord(','):lambda:self.rotateImage(-10),
             ord('.'):lambda:self.rotateImage(10),
             ord('0'):self.fitImageToView,
+            ord('o'):self.askFile,
         }
+        #menu items
         self.actionOpen.triggered.connect(self.askFile)
         self.actionZoomIn.triggered.connect(self.zoomIn)
         self.actionZoomOut.triggered.connect(self.zoomOut)
+        self.actionZoomIn.triggered.connect(self.zoomIn)
+        self.actionZoomOut.triggered.connect(self.zoomOut)
+        #toolbar icons
+        self.buttonZoomIn.clicked.connect(self.zoomIn)
+        self.buttonZoomOut.clicked.connect(self.zoomOut)
+        self.buttonRotateCCW.clicked.connect(lambda:self.rotateImage(-10))
+        self.buttonRotateCW.clicked.connect(lambda:self.rotateImage(10))
         #self.actionRotate.triggered.connect(self.rotateImageDialog)
 
 
