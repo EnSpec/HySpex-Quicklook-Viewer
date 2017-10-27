@@ -1,7 +1,23 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 import graphics_app_ui
+from hyspex_parse import readlines_gdal
 import sys
+import os
 import math
+
+BANDS = [75,46,19]
+class HyspexParseThread(QtCore.QThread):
+    def __init__(self,parent,in_fname,out_fname):
+        QtCore.QThread.__init__(self)
+        self._in_fname = in_fname
+        self._out_fname = out_fname
+        #self._parent.progressBar.setRange(0,100)
+        #self._parent.progressBar.setValue(0)
+        #self._parent.progressBar.setHidden(False)
+    def run(self):
+        filled = 0
+        data = readlines_gdal.readBIL(self._in_fname,BANDS,False)
+        readlines_gdal.toGeoTiff(self._out_fname,data)
 
 #UI Class taken from http://doc.qt.io/qt-5/qtwidgets-widgets-imageviewer-example.html
 class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
@@ -24,22 +40,40 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         }
         #menu items
         self.actionOpen.triggered.connect(self.askFile)
-        self.actionZoomIn.triggered.connect(self.zoomIn)
-        self.actionZoomOut.triggered.connect(self.zoomOut)
-        self.actionZoomIn.triggered.connect(self.zoomIn)
-        self.actionZoomOut.triggered.connect(self.zoomOut)
+        self.actionZoomIn.triggered.connect(lambda:self.zoomIn(1.25))
+        self.actionZoomOut.triggered.connect(lambda:self.zoomOut(1.25))
         #toolbar icons
-        self.buttonZoomIn.clicked.connect(self.zoomIn)
-        self.buttonZoomOut.clicked.connect(self.zoomOut)
-        self.buttonRotateCCW.clicked.connect(lambda:self.rotateImage(-10))
-        self.buttonRotateCW.clicked.connect(lambda:self.rotateImage(10))
+        self.buttonZoomIn.clicked.connect(lambda:self.zoomIn(1.25))
+        self.buttonZoomOut.clicked.connect(lambda:self.zoomOut(1.25))
+        self.buttonRotateCCW.clicked.connect(lambda:self.rotateImage(-30))
+        self.buttonRotateCW.clicked.connect(lambda:self.rotateImage(30))
         #self.actionRotate.triggered.connect(self.rotateImageDialog)
 
+
+
+    def scrollEvent(self,event):
+        if event.delta() > 0:
+            self.zoomIn()
+        else:
+            self.zoomOut()
 
     def askFile(self):
         fname,_ = QtWidgets.QFileDialog.getOpenFileName(self)
         if(fname):
-            self.loadFile(fname)
+            name,ext = os.path.splitext(fname)
+            #check for a hyspex file - it will need to be processed
+            if ext in ['.hyspex','.bil']:
+                out_fname = name+'.tiff'
+                #check for a previously generated tiff file
+                if not os.path.exists(out_fname):
+                    #stick data processing in a thread so it doesn't hang the app
+                    self.parseThread = HyspexParseThread(self,fname,out_fname)
+                    self.parseThread.finished.connect(lambda:self.loadFile(out_fname))
+                    self.parseThread.start()
+                else:
+                    self.loadFile(out_fname)
+            else:
+                self.loadFile(fname)
 
     def loadFile(self,fname):
         self.scene.clear()
@@ -52,11 +86,11 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.total_rotation += degrees
         self.graphicsView.rotate(degrees)
 
-    def zoomIn(self):
-        self.graphicsView.scale(1.1,1.1)
+    def zoomIn(self,amt=1.1):
+        self.graphicsView.scale(amt,amt)
 
-    def zoomOut(self):
-        self.graphicsView.scale(1/1.1,1/1.1)
+    def zoomOut(self,amt=1.1):
+        self.graphicsView.scale(1/amt,1/amt)
 
     def fitImageToView(self):
         pass
