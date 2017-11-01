@@ -4,7 +4,10 @@ import numpy as np
 gdal.GetDriverByName('EHdr').Register()
 
 
-def readBIL(fname,band_idxs,piecewise=False):
+def readBIL(fname,band_idxs):
+    '''Read the RGB bands from a BIL file, yielding occasionally so
+    the caller can guess at the progress
+    '''
     img = gdal.Open(fname)
     bands = []
     for b in band_idxs:
@@ -14,14 +17,10 @@ def readBIL(fname,band_idxs,piecewise=False):
     out_arrs=[]
     for b in bands:
         out_arrs.append(b.ReadAsArray())
-        if piecewise:
-            pass#yield None
         print("Array'd Band")
+        yield None
     out = np.array(out_arrs)
-    if piecewise:
-        pass#yield out
-    else:
-        return out
+    yield out
 
 def processBand(band,idx):
     #adjust band to appear as true-color as possible

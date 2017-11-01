@@ -1,4 +1,5 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
+from multiprocessing import Process, Queue
 import graphics_app_ui
 from hyspex_parse import readlines_gdal
 import sys
@@ -6,20 +7,27 @@ import os
 import math
 
 BANDS = [75,46,19]
-class HyspexParseThread(QtCore.QThread):
-    def __init__(self,parent,in_fname,out_fname):
-        QtCore.QThread.__init__(self)
-        self._in_fname = in_fname
-        self._out_fname = out_fname
-        #self._parent.progressBar.setRange(0,100)
-        #self._parent.progressBar.setValue(0)
-        #self._parent.progressBar.setHidden(False)
-    def run(self):
-        filled = 0
-        data = readlines_gdal.readBIL(self._in_fname,BANDS,False)
-        readlines_gdal.toGeoTiff(self._out_fname,data)
+def HyspexParser(tQ,rQ):
+    """Function for multiprocess that converts hyspex files to TIFFs,
+    while providing updates on its current progress to its parent
+    """
+    while 1:
+        #expects a 2-tuple of strings
+        fname,out_fname=tQ.get()
+        #None is the poison pill
+        if fname is None:
+            break
+        print("Parsing {} to {}".format(fname,out_fname))
+        filled = 33
+        for data in readlines_gdal.readBIL(fname,BANDS):
+            print(data)
+            if data is None:
+                rQ.put(filled)
+                filled+=33
 
-#UI Class taken from http://doc.qt.io/qt-5/qtwidgets-widgets-imageviewer-example.html
+        readlines_gdal.toGeoTiff(out_fname,data)
+        rQ.put("OK")
+
 class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
     def __init__(self,parent = None):
         super(QuickLookApp,self).__init__(parent)
@@ -29,14 +37,12 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.graphicsView.setScene(self.scene)
         self.graphicsView.setDragMode(QtWidgets.QGraphicsView.ScrollHandDrag)
         self.total_rotation = 0
-        self.loadFile('test.jpeg')
         self.key_event_dict = {
             ord('='):self.zoomIn,
             ord('-'):self.zoomOut,
             ord(','):lambda:self.rotateImage(-10),
             ord('.'):lambda:self.rotateImage(10),
-            ord('0'):self.fitImageToView,
-            ord('o'):self.askFile,
+            ord('O'):self.askFile,
         }
         #menu items
         self.actionOpen.triggered.connect(self.askFile)
@@ -47,9 +53,16 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.buttonZoomOut.clicked.connect(lambda:self.zoomOut(1.25))
         self.buttonRotateCCW.clicked.connect(lambda:self.rotateImage(-30))
         self.buttonRotateCW.clicked.connect(lambda:self.rotateImage(30))
-        #self.actionRotate.triggered.connect(self.rotateImageDialog)
-
-
+        #hyspex parser subprocess
+        self.tQ = Queue()
+        self.rQ = Queue()
+        self.parser = Process(target=HyspexParser,args=(self.tQ,self.rQ))
+        self.parser.start()
+        self.parsing=False
+        #progress bar display
+        self.timer= QtCore.QTimer()
+        self.timer.timeout.connect(self.getProgressUpdate)
+        self.timer.start(1000)
 
     def scrollEvent(self,event):
         if event.delta() > 0:
@@ -62,18 +75,31 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         if(fname):
             name,ext = os.path.splitext(fname)
             #check for a hyspex file - it will need to be processed
-            if ext in ['.hyspex','.bil']:
+            if ext in ['.hyspex','.bil','']:
                 out_fname = name+'.tiff'
                 #check for a previously generated tiff file
                 if not os.path.exists(out_fname):
-                    #stick data processing in a thread so it doesn't hang the app
-                    self.parseThread = HyspexParseThread(self,fname,out_fname)
-                    self.parseThread.finished.connect(lambda:self.loadFile(out_fname))
-                    self.parseThread.start()
+                    #offload data processing to a subprocess so so it doesn't hang the app
+                    self.prepareLoad(fname,out_fname)
                 else:
                     self.loadFile(out_fname)
             else:
                 self.loadFile(fname)
+
+    def prepareLoad(self,fname,out_fname):
+        #estimate the load time for the file
+        #Tests show it's about 20 seconds per GB per band
+        fsize = os.path.getsize(fname)
+        load_time = 2 * 20 * (fsize/1e9) 
+        self.load_rate = 100./load_time
+        self.tQ.put((fname,out_fname))
+        self.fname = fname
+        self.out_fname = out_fname
+        self.result=0.
+        self.value=0.
+        self.parsing=True
+        self.progressBar.setValue(0)
+        self.progressBar.setHidden(False)
 
     def loadFile(self,fname):
         self.scene.clear()
@@ -92,16 +118,40 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
     def zoomOut(self,amt=1.1):
         self.graphicsView.scale(1/amt,1/amt)
 
-    def fitImageToView(self):
-        pass
-
-    def fullSizeImage(self):
-        pass
-
     def keyPressEvent(self,e):
         if e.modifiers() == QtCore.Qt.ControlModifier: 
             if(e.key() in self.key_event_dict):
                 self.key_event_dict[e.key()]()
+
+
+    def getProgressUpdate(self):
+        if not self.parsing:
+            return
+        else:
+            #get every result from the parser
+            while not self.rQ.empty():
+                self.result = self.rQ.get()
+                print("got",self.result)
+
+            if self.result == "OK":
+                #file is fully parsed and ready to go
+                self.parsing=False
+                self.loadFile(self.out_fname)
+                self.progressBar.setHidden(True)
+            else:
+                self.value+=self.load_rate
+                if(self.value < self.result):
+                    self.value = self.result
+                elif (self.value > self.result+66):
+                    self.value = self.result+66
+                self.progressBar.setValue(int(self.value))
+
+
+        
+    def cleanup(self):
+        self.tQ.put((None,None))
+        self.parser.join()
+    
 
 if __name__ == '__main__':
     
@@ -109,5 +159,6 @@ if __name__ == '__main__':
 
     viewer = QuickLookApp()
     viewer.show()
-    
-    sys.exit(app.exec_())
+    app.exec_()
+    viewer.cleanup()
+
