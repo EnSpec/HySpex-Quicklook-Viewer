@@ -1,13 +1,13 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Array
 import graphics_app_ui
-from hyspex_parse import readlines_gdal
+from hyspex_parse import readlines as readlines_gdal
 import sys
 import os
 import math
 
 BANDS = [75,46,19]
-def HyspexParser(tQ,rQ):
+def HyspexParser(tQ,rQ,arr):
     """Function for multiprocess that converts hyspex files to TIFFs,
     while providing updates on its current progress to its parent
     """
@@ -19,11 +19,7 @@ def HyspexParser(tQ,rQ):
             break
         print("Parsing {} to {}".format(fname,out_fname))
         filled = 33
-        for data in readlines_gdal.readBIL(fname,BANDS):
-            print(data)
-            if data is None:
-                rQ.put(filled)
-                filled+=33
+        data = readlines_gdal.readBIL(fname,BANDS)
 
         readlines_gdal.toGeoTiff(out_fname,data)
         rQ.put("OK")
@@ -56,7 +52,8 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         #hyspex parser subprocess
         self.tQ = Queue()
         self.rQ = Queue()
-        self.parser = Process(target=HyspexParser,args=(self.tQ,self.rQ))
+        self.update_arr = Array('i',[0,0])
+        self.parser = Process(target=HyspexParser,args=(self.tQ,self.rQ,self.update_arr))
         self.parser.start()
         self.parsing=False
         #progress bar display
@@ -87,11 +84,8 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
                 self.loadFile(fname)
 
     def prepareLoad(self,fname,out_fname):
-        #estimate the load time for the file
-        #Tests show it's about 20 seconds per GB per band
-        fsize = os.path.getsize(fname)
-        load_time = 2 * 20 * (fsize/1e9) 
-        self.load_rate = 100./load_time
+        self.update_arr[0]=0 
+        self.update_arr[1]=0
         self.tQ.put((fname,out_fname))
         self.fname = fname
         self.out_fname = out_fname
@@ -128,23 +122,18 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         if not self.parsing:
             return
         else:
-            #get every result from the parser
-            while not self.rQ.empty():
+            if(self.update_arr[1]):
+                self.progressBar.setValue(int(float(self.update_arr[0])/self.update_arr[1]))
+            #check for result from parser
+            if not self.rQ.empty():
                 self.result = self.rQ.get()
                 print("got",self.result)
 
-            if self.result == "OK":
-                #file is fully parsed and ready to go
-                self.parsing=False
-                self.loadFile(self.out_fname)
-                self.progressBar.setHidden(True)
-            else:
-                self.value+=self.load_rate
-                if(self.value < self.result):
-                    self.value = self.result
-                elif (self.value > self.result+66):
-                    self.value = self.result+66
-                self.progressBar.setValue(int(self.value))
+                if self.result == "OK":
+                    #file is fully parsed and ready to go
+                    self.parsing=False
+                    self.loadFile(self.out_fname)
+                    self.progressBar.setHidden(True)
 
 
         
