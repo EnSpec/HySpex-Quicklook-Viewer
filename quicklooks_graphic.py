@@ -19,7 +19,8 @@ def HyspexParser(tQ,rQ,arr):
             break
         print("Parsing {} to {}".format(fname,out_fname))
         filled = 33
-        data = readlines_gdal.readBIL(fname,BANDS)
+        data = readlines_gdal.readBIL(fname,BANDS[::-1],readmode='mmap',update_arr=arr,step=4)
+        print("After data")
 
         readlines_gdal.toGeoTiff(out_fname,data)
         rQ.put("OK")
@@ -53,7 +54,7 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.tQ = Queue()
         self.rQ = Queue()
         self.update_arr = Array('i',[0,0])
-        self.parser = Process(target=HyspexParser,args=(self.tQ,self.rQ,self.update_arr))
+        self.parser = Process(target=HyspexParser,args=(self.tQ,self.rQ,self.update_arr),daemon=True)
         self.parser.start()
         self.parsing=False
         #progress bar display
@@ -123,7 +124,7 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
             return
         else:
             if(self.update_arr[1]):
-                self.progressBar.setValue(int(float(self.update_arr[0])/self.update_arr[1]))
+                self.progressBar.setValue(int(100*float(self.update_arr[0])/self.update_arr[1]))
             #check for result from parser
             if not self.rQ.empty():
                 self.result = self.rQ.get()
