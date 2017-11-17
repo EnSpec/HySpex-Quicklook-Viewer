@@ -5,8 +5,10 @@ from hyspex_parse import readlines as readlines_gdal
 import sys
 import os
 import math
+from FileNavigator import FileNavigator
 
 BANDS = [75,46,19]
+DRIVE = 'R:\\'
 def HyspexParser(tQ,rQ,arr):
     """Function for multiprocess that converts hyspex files to TIFFs,
     while providing updates on its current progress to its parent
@@ -61,6 +63,13 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.timer= QtCore.QTimer()
         self.timer.timeout.connect(self.getProgressUpdate)
         self.timer.start(1000)
+        #File Navigator for auto-detecting new files
+        self.fn = FileNavigator(DRIVE)
+        self.defaultDrive.addItems(self.fn._drives)
+        self.defaultDrive.setCurrentIndex(self.fn._drives.index(self.fn._drive))
+
+        self.loadLatestButton.clicked.connect(
+                lambda:self.askFile(self.fn.findLatest('.*VNIR.*hyspex$')))
 
     def scrollEvent(self,event):
         if event.delta() > 0:
@@ -68,19 +77,14 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         else:
             self.zoomOut()
 
-    def askFile(self):
-        fname,_ = QtWidgets.QFileDialog.getOpenFileName(self)
+    def askFile(self,fname=None):
+        if not fname:
+            fname,_ = QtWidgets.QFileDialog.getOpenFileName(self)
         if(fname):
             name,ext = os.path.splitext(fname)
             #check for a hyspex file - it will need to be processed
             if ext in ['.hyspex','.bil','']:
-                out_fname = name+'.tiff'
-                #check for a previously generated tiff file
-                if not os.path.exists(out_fname):
-                    #offload data processing to a subprocess so so it doesn't hang the app
-                    self.prepareLoad(fname,out_fname)
-                else:
-                    self.loadFile(out_fname)
+                self.prepareLoad(fname,'tmp.tiff')
             else:
                 self.loadFile(fname)
 
