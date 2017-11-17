@@ -14,14 +14,15 @@ def HyspexParser(tQ,rQ,arr):
     while providing updates on its current progress to its parent
     """
     while 1:
-        #expects a 2-tuple of strings
-        fname,out_fname=tQ.get()
+        task = tQ.get()
         #None is the poison pill
-        if fname is None:
+        if task is None:
             break
+        #expects a 3-tuple of 2 strings and an int
+        fname,out_fname,step = task
         print("Parsing {} to {}".format(fname,out_fname))
         filled = 33
-        data = readlines_gdal.readBIL(fname,BANDS[::-1],readmode='mmap',update_arr=arr,step=4)
+        data = readlines_gdal.readBIL(fname,BANDS[::-1],readmode='mmap',update_arr=arr,step=step)
         print("After data")
 
         readlines_gdal.toGeoTiff(out_fname,data)
@@ -52,6 +53,8 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.buttonZoomOut.clicked.connect(lambda:self.zoomOut(1.25))
         self.buttonRotateCCW.clicked.connect(lambda:self.rotateImage(-30))
         self.buttonRotateCW.clicked.connect(lambda:self.rotateImage(30))
+        self.buttonFlipH.clicked.connect(self.flipH)
+        self.buttonFlipV.clicked.connect(self.flipV)
         #hyspex parser subprocess
         self.tQ = Queue()
         self.rQ = Queue()
@@ -63,6 +66,13 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.timer= QtCore.QTimer()
         self.timer.timeout.connect(self.getProgressUpdate)
         self.timer.start(1000)
+
+        #image loading parameters
+        self.loadscale = 4
+        self.halfScaleButton.clicked.connect(lambda:setattr(self,"loadscale",2))
+        self.fourthScaleButton.clicked.connect(lambda:setattr(self,"loadscale",4))
+        self.eigthScaleButton.clicked.connect(lambda:setattr(self,"loadscale",8))
+        self.pixmap=None
         #File Navigator for auto-detecting new files
         self.fn = FileNavigator(DRIVE)
         self.defaultDrive.addItems(self.fn._drives)
@@ -91,7 +101,7 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
     def prepareLoad(self,fname,out_fname):
         self.update_arr[0]=0 
         self.update_arr[1]=0
-        self.tQ.put((fname,out_fname))
+        self.tQ.put((fname,out_fname,self.loadscale))
         self.fname = fname
         self.out_fname = out_fname
         self.result=0.
@@ -106,6 +116,20 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.pixmap = QtGui.QPixmap(fname)
         self.graphics_pixmap_item = QtWidgets.QGraphicsPixmapItem(self.pixmap)
         self.scene.addPixmap(self.pixmap)
+
+    def flipH(self):
+        if self.pixmap:
+            self.scene.clear()
+            self.pixmap = self.pixmap.transformed(QtGui.QTransform().scale(1, -1))
+            self.graphics_pixmap_item = QtWidgets.QGraphicsPixmapItem(self.pixmap)
+            self.scene.addPixmap(self.pixmap)
+
+    def flipV(self):
+        if self.pixmap:
+            self.scene.clear()
+            self.pixmap = self.pixmap.transformed(QtGui.QTransform().scale(-1, 1))
+            self.graphics_pixmap_item = QtWidgets.QGraphicsPixmapItem(self.pixmap)
+            self.scene.addPixmap(self.pixmap)
 
     def rotateImage(self,degrees=90):
         self.total_rotation += degrees
@@ -143,7 +167,7 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
 
         
     def cleanup(self):
-        self.tQ.put((None,None))
+        self.tQ.put(None)
         self.parser.join()
     
 
