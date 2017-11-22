@@ -37,7 +37,6 @@ class FileNavigator(object):
                 files.append(full_path)
             except PermissionError:
                 pass
-        child_dir = None
         #we need to look in all directories since we don't know if the latest 
         #matching file is in the latest updated path
         for f in files:

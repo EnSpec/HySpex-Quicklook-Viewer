@@ -20,7 +20,7 @@ def readBIL(fname,bands,readmode='lines',update_arr = None,step=1):
     hyspex_f.seek(head_size,os.SEEK_SET)
 
     if isinstance(bands,list):
-        out_arr = np.empty([len(bands),spatial/step,number/step],dtype='uint16')
+        out_arr = np.empty([len(bands),spatial//step,number//step],dtype='uint16')
         #number of pixels we must step through to get from one channel to the next
         final_step = spectral-bands[-1]
         curr_pos = head_size
@@ -36,9 +36,11 @@ def readBIL(fname,bands,readmode='lines',update_arr = None,step=1):
                 if(int(i/step)%100==0):
                     if update_arr:
                         update_arr[0]=int(i/step)
-                    print("Reading line %d"%i)
+                        #check for poison pill
+                        if update_arr[1]==-1:
+                            raise RuntimeError("I've been poisoned!")
                 for b,band in enumerate(bands):
-                    out_arr[b,:,i/step]=mmaped_data[i,band-1,::step]
+                    out_arr[b,:,i//step]=mmaped_data[i,band-1,::step]
             return out_arr[::-1,:,:]
 
         for i in range(number):
@@ -91,7 +93,6 @@ def processBand(band,idx):
 def toGeoTiff(fname,rgb_arr):
     driver = gdal.GetDriverByName("GTiff")
     bands,rows,cols= rgb_arr.shape
-    print(rows,cols,bands)
     out = driver.Create(fname,cols,rows,bands,gdal.GDT_UInt16,
             options = ['PHOTOMETRIC=RGB','PROFILE=GeoTIFF',])
     for b in range(bands):
