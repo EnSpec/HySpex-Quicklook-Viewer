@@ -215,9 +215,7 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.tQ.put(None)
         self.parser.join()
     
-
-if __name__ == '__main__':
-    
+def run():
     app = QtWidgets.QApplication(sys.argv)
 
     viewer = QuickLookApp()
@@ -225,3 +223,5 @@ if __name__ == '__main__':
     app.exec_()
     viewer.cleanup()
 
+if __name__ == '__main__':
+    run()

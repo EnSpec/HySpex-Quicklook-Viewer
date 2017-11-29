@@ -1,1 +1,6 @@
+## HySpex QuickLook Viewer
+To install, make sure you have a 64-bit version of python 3 installed to your system
+(https://www.python.org/downloads/windows/). Then, run the install.bat script, which should
+install all necessary python packages and create a link to the viewer on your desktop.
+
 GUI Icons courtesy of https://icons8.com/
