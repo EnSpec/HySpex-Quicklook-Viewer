@@ -1,5 +1,5 @@
 import numpy as np
-import gdal
+from PIL import Image
 import os
 
 #adapted from https://github.com/StrawsonDesign/hyspex_viewer/
@@ -91,6 +91,15 @@ def processBand(band,idx):
     return band
 
 def toGeoTiff(fname,rgb_arr):
+    bands,rows,cols = rgb_arr.shape
+    arr_8bit = np.empty([rows,cols,bands],dtype='uint8')
+    for b in range(bands):
+        pband = processBand(rgb_arr[b,:,:],b)
+        arr_8bit[:,:,b] = (pband//256).astype('uint8')
+    im = Image.fromarray(arr_8bit,mode='RGB')
+    im.save(fname)
+
+    '''
     driver = gdal.GetDriverByName("GTiff")
     bands,rows,cols= rgb_arr.shape
     out = driver.Create(fname,cols,rows,bands,gdal.GDT_UInt16,
@@ -98,14 +107,14 @@ def toGeoTiff(fname,rgb_arr):
     for b in range(bands):
         out.GetRasterBand(b+1).WriteArray(processBand(rgb_arr[b,:,:],b))
         out.GetRasterBand(b+1).FlushCache()
-    
+    '''
 
 
 if __name__=='__main__':
     import sys
     if sys.argv[2] == '1':
         bands = readBIL(sys.argv[1],[19,46,75],sys.argv[3])
-        toGeoTiff("test.tiff",bands)
+        toGeoTiff("test.png",bands)
     else:
         bands = readBIL(sys.argv[1],75)
 
