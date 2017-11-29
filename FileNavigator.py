@@ -36,12 +36,12 @@ class FileNavigator(object):
         depth max_depth
         """
         files = []
-        for f in os.listdir(path):
-            try:
+        try:
+            for f in os.listdir(path):
                 full_path = os.path.join(path,f)
                 os.path.getmtime(full_path)
                 files.append(full_path)
-            except PermissionError:
+        except PermissionError:
                 pass
         #we need to look in all directories since we don't know if the latest 
         #matching file is in the latest updated path
