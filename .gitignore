@@ -1,4 +1,5 @@
 *.jpeg
 __pycache__
 *.tiff
+*.lnk
 tmp.png
