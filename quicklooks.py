@@ -73,10 +73,10 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.fn = FileNavigator(DRIVE)
         self.defaultDrive.addItems(self.fn._drives)
         self.defaultDrive.setCurrentIndex(self.fn._drives.index(self.fn._drive))
+        self.defaultDrive.currentIndexChanged.connect(self.changeDrive);
 
         self.openButton.clicked.connect(self.askFile)
-        self.loadLatestButton.clicked.connect(
-                lambda:self.askFile(self.fn.findLatest('.*VNIR.*hyspex$')))
+        self.loadLatestButton.clicked.connect(self.askLatest)
         self.cancelButton.clicked.connect(self.cancelLoad)
 
     def setupParser(self):
@@ -109,6 +109,16 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         else:
             self.zoomOut()
 
+    def changeDrive(self):
+        self.fn.setDrive(self.defaultDrive.currentText())
+
+    def askLatest(self):
+        try:
+            self.askFile(self.fn.findLatest('.*VNIR.*hyspex$'))
+        except:
+            self.fileLabel.setStyleSheet('color: red')
+            self.fileLabel.setText("Error: No hyspex files found on drive {}".format(self.fn._drive))
+
     def askFile(self,fname=None):
         if not fname:
             fname,_ = QtWidgets.QFileDialog.getOpenFileName(self)
@@ -116,7 +126,7 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
             name,ext = os.path.splitext(fname)
             #check for a hyspex file - it will need to be processed
             if ext in ['.hyspex','.bil','']:
-                self.prepareLoad(fname,'tmp.tiff')
+                self.prepareLoad(fname,'tmp.png')
             else:
                 self._fname = fname
                 self.loadFile(fname)
@@ -125,6 +135,7 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
 
         self._old_fname = self._fname
         self._fname = fname
+        self.fileLabel.setStyleSheet('color: black')
         self.fileLabel.setText("Loading {}...".format(fname))
         self.update_arr[0]=0 
         self.update_arr[1]=0

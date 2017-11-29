@@ -25,6 +25,12 @@ class FileNavigator(object):
         self._find_latest(matches,path,max_depth,1)
         return min(self.matching_files,key=os.path.getmtime)
 
+    def setDrive(self,drive):
+        if drive in self._drives:
+            self._drive = drive
+        else:
+            raise IOError("Unknown drive: {}".format(drive))
+
     def _find_latest(self,matches='.*',path=None,max_depth=2,curr_depth=1):
         """Recursively search for files in drive self._drive up to recursion 
         depth max_depth

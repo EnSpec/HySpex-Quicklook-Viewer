@@ -247,7 +247,7 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
+        MainWindow.setWindowTitle(_translate("MainWindow", "Quicklooks Viewer"))
         self.buttonZoomIn.setText(_translate("MainWindow", "+"))
         self.buttonZoomOut.setText(_translate("MainWindow", "-"))
         self.buttonRotateCCW.setText(_translate("MainWindow", "CCW"))
