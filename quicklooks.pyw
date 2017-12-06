@@ -1,6 +1,7 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from multiprocessing import Process, Queue, Array
 import graphics_app_ui
+import help_keys_ui
 from hyspex_parse import readlines as readlines_gdal
 import sys
 import os
@@ -27,28 +28,46 @@ def HyspexParser(tQ,rQ,arr):
         except RuntimeError:
             rQ.put("NOK")
 
+class HelpDialog(QtWidgets.QDialog,help_keys_ui.Ui_Dialog):
+    def __init__(self,parent=None):
+        super(HelpDialog,self).__init__(parent)
+        self.setupUi(self)
+
 class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
     def __init__(self,parent = None):
         super(QuickLookApp,self).__init__(parent)
         self.setupUi(self)
         self.progressBar.setHidden(True)
+        self.spinLabel.setHidden(True)
         self.cancelButton.setHidden(True)
         self.scene = QtWidgets.QGraphicsScene()
         self.graphicsView.setScene(self.scene)
         self.graphicsView.setDragMode(QtWidgets.QGraphicsView.ScrollHandDrag)
         self.total_rotation = 0
+        self._old_fname = ''
+        #keybindings
         self.key_event_dict = {
             ord('='):self.zoomIn,
             ord('-'):self.zoomOut,
             ord(','):lambda:self.rotateImage(-10),
             ord('.'):lambda:self.rotateImage(10),
+            ord('['):lambda:self.changeLoadScale(1),
+            ord(']'):lambda:self.changeLoadScale(-1),
+            ord('H'):self.showHelp,
+            ord('I'):self.showHelp,
             ord('O'):self.askFile,
+            ord('L'):self.askLatest,
+            ord('D'):self.focusDrive,
+            ord('C'):self.cancelLoad,
+            ord('V'):self.flipV,
+            ord('B'):self.flipH,
         }
         #menu items
         self.actionOpen.triggered.connect(self.askFile)
         self.actionZoomIn.triggered.connect(lambda:self.zoomIn(1.25))
         self.actionZoomOut.triggered.connect(lambda:self.zoomOut(1.25))
         #toolbar icons
+        self.aboutButton.clicked.connect(self.showHelp)
         self.buttonZoomIn.clicked.connect(lambda:self.zoomIn(1.25))
         self.buttonZoomOut.clicked.connect(lambda:self.zoomOut(1.25))
         self.buttonRotateCCW.clicked.connect(lambda:self.rotateImage(-30))
@@ -57,6 +76,10 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.buttonFlipV.clicked.connect(self.flipV)
         #hyspex parser subprocess
         self.setupParser()
+        #load spinner display
+        self.spinGif = QtGui.QMovie("Assets/ajax-loader.gif")
+        self.spinLabel.setMovie(self.spinGif)
+        self.spinGif.start();
         #progress bar display
         self._fname = ''
         self.timer= QtCore.QTimer()
@@ -78,6 +101,10 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.openButton.clicked.connect(self.askFile)
         self.loadLatestButton.clicked.connect(self.askLatest)
         self.cancelButton.clicked.connect(self.cancelLoad)
+
+
+    def focusDrive(self):
+        self.defaultDrive.showPopup()
 
     def setupParser(self):
         self.tQ = Queue()
@@ -109,15 +136,27 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         else:
             self.zoomOut()
 
+
+    def showHelp(self):
+        help_dialog = HelpDialog(self)
+        help_dialog.show()
+
+
     def changeDrive(self):
         self.fn.setDrive(self.defaultDrive.currentText())
 
     def askLatest(self):
+        self.spinLabel.setHidden(False)
+        self.fileLabel.setText("Searching drive {}".format(self.fn._drive))
         try:
-            self.askFile(self.fn.findLatest('.*VNIR.*hyspex$'))
+            fname = self.fn.findLatest('.*VNIR.*hyspex$')
+            self.askFile(fname)
         except:
+            print("hhhh")
             self.fileLabel.setStyleSheet('color: red')
             self.fileLabel.setText("Error: No hyspex files found on drive {}".format(self.fn._drive))
+        finally:
+            self.spinLabel.setHidden(True)
 
     def askFile(self,fname=None):
         if not fname:
@@ -158,6 +197,7 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.graphics_pixmap_item = QtWidgets.QGraphicsPixmapItem(self.pixmap)
         self.scene.addPixmap(self.pixmap)
         self.fileLabel.setText(self._fname)
+        self.graphicsView.setFocus()
 
     def flipH(self):
         if self.pixmap:
