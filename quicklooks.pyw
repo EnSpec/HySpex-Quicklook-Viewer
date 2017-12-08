@@ -1,5 +1,6 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from multiprocessing import Process, Queue, Array
+from datetime import datetime
 import graphics_app_ui
 import help_keys_ui
 from hyspex_parse import readlines as readlines_gdal
@@ -40,6 +41,7 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.progressBar.setHidden(True)
         self.spinLabel.setHidden(True)
         self.cancelButton.setHidden(True)
+        self.fileInfoWidget.setHidden(True)
         self.scene = QtWidgets.QGraphicsScene()
         self.graphicsView.setScene(self.scene)
         self.graphicsView.setDragMode(QtWidgets.QGraphicsView.ScrollHandDrag)
@@ -147,16 +149,16 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
 
     def askLatest(self):
         self.spinLabel.setHidden(False)
+        self.fileInfoWidget.setHidden(False)
         self.fileLabel.setText("Searching drive {}".format(self.fn._drive))
         try:
             fname = self.fn.findLatest('.*VNIR.*hyspex$')
-            self.askFile(fname)
         except:
-            print("hhhh")
             self.fileLabel.setStyleSheet('color: red')
             self.fileLabel.setText("Error: No hyspex files found on drive {}".format(self.fn._drive))
         finally:
             self.spinLabel.setHidden(True)
+        self.askFile(fname)
 
     def askFile(self,fname=None):
         if not fname:
@@ -172,8 +174,15 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
 
     def prepareLoad(self,fname,out_fname):
 
+        self._loaded = 0
         self._old_fname = self._fname
         self._fname = fname
+        stats = os.stat(fname)
+        size_gb = stats.st_size/1.e9
+        self.sizeLabel.setText("%.2f GB"%size_gb)
+        date = datetime.fromtimestamp(stats.st_ctime)
+        self.dateLabel.setText(date.strftime("%Y-%m-%d"))
+        self.timeLabel.setText(date.strftime("%H:%M:%S"))
         self.fileLabel.setStyleSheet('color: black')
         self.fileLabel.setText("Loading {}...".format(fname))
         self.update_arr[0]=0 
@@ -189,6 +198,9 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.openButton.setEnabled(False)
         self.progressBar.setHidden(False)
         self.cancelButton.setHidden(False)
+        self.speedLabel.setHidden(False)
+        self.speedLabel.setHidden(False)
+        self.speedTextLabel.setHidden(False)
 
     def loadFile(self,fname):
         self.scene.clear()
@@ -235,6 +247,10 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         else:
             if(self.update_arr[1]):
                 self.progressBar.setValue(int(100*float(self.update_arr[0])/self.update_arr[1]))
+                self.linesLabel.setText(str(self.update_arr[1]))
+                self.speedLabel.setText(str((self.update_arr[0]-self._loaded))+"Ln/s")
+                self._loaded = self.update_arr[0]
+
             #check for result from parser
             if not self.rQ.empty():
                 self.result = self.rQ.get()
@@ -245,8 +261,11 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
                     self.loadFile(self.out_fname)
                     self.progressBar.setHidden(True)
                     self.cancelButton.setHidden(True)
+                    self.speedLabel.setHidden(True)
+                    self.speedTextLabel.setHidden(True)
                     self.loadLatestButton.setEnabled(True)
                     self.openButton.setEnabled(True)
+                    self.speedLabel.setText("")
                 if self.result == "NOK":
                     pass
 

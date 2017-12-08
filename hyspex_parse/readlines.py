@@ -16,7 +16,7 @@ def readBIL(fname,bands,readmode='lines',update_arr = None,step=1):
     #number of lines in image
     number = np.fromstring(hyspex_f.read(4),'int32')[0]
     if update_arr:
-        update_arr[1] = int(number/step)
+        update_arr[1] = int(number)
     hyspex_f.seek(head_size,os.SEEK_SET)
 
     if isinstance(bands,list):
@@ -33,12 +33,11 @@ def readBIL(fname,bands,readmode='lines',update_arr = None,step=1):
             for i in range(0,number,step):
                 if(i/step>=out_arr.shape[2]):
                     break
-                if(int(i/step)%100==0):
-                    if update_arr:
-                        update_arr[0]=int(i/step)
-                        #check for poison pill
-                        if update_arr[1]==-1:
-                            raise RuntimeError("I've been poisoned!")
+                if update_arr:
+                    update_arr[0]=int(i)
+                    #check for poison pill
+                    if update_arr[1]==-1:
+                        raise RuntimeError("I've been poisoned!")
                 for b,band in enumerate(bands):
                     out_arr[b,:,i//step]=mmaped_data[i,band-1,::step]
             return out_arr[::-1,:,:]
