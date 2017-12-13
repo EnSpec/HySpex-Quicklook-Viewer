@@ -3,7 +3,10 @@ from PIL import Image
 import os
 
 #adapted from https://github.com/StrawsonDesign/hyspex_viewer/
-def readBIL(fname,bands,readmode='lines',update_arr = None,step=1):
+def readBIL(fname,orig_bands,readmode='lines',update_arr = None,step=1):
+    #must read in ascending order
+    order = np.argsort(orig_bands)
+    bands = np.array(orig_bands)[order]
     hyspex_f = open(fname,"rb")
     header = hyspex_f.read(8)
     assert header == b'HYSPEX\x00\x00'
@@ -19,81 +22,52 @@ def readBIL(fname,bands,readmode='lines',update_arr = None,step=1):
         update_arr[1] = int(number)
     hyspex_f.seek(head_size,os.SEEK_SET)
 
-    if isinstance(bands,list):
-        out_arr = np.empty([len(bands),spatial//step,number//step],dtype='uint16')
-        #number of pixels we must step through to get from one channel to the next
-        final_step = spectral-bands[-1]
-        curr_pos = head_size
-        band_cycle = [bands[0]-1]+list(np.diff(bands)-1)
-        if readmode == 'mmap':
-            #mmap the whole file
-            mmaped_data = np.memmap(hyspex_f,dtype='uint16',mode='r',offset=curr_pos)
-            mmaped_data.shape = (number,spectral,spatial)
-            #extract the appropriate bands
-            for i in range(0,number,step):
-                if(i/step>=out_arr.shape[2]):
-                    break
-                if update_arr:
-                    update_arr[0]=int(i)
-                    #check for poison pill
-                    if update_arr[1]==-1:
-                        raise RuntimeError("I've been poisoned!")
-                for b,band in enumerate(bands):
-                    out_arr[b,:,i//step]=mmaped_data[i,band-1,::step]
-            return out_arr[::-1,:,:]
+    out_arr = np.empty([len(bands),spatial//step,number//step],dtype='uint16')
+    #number of pixels we must step through to get from one channel to the next
+    final_step = spectral-bands[-1]
+    curr_pos = head_size
+    band_cycle = [bands[0]-1]+list(np.diff(bands)-1)
+    if readmode == 'mmap':
+        #mmap the whole file
+        mmaped_data = np.memmap(hyspex_f,dtype='uint16',mode='r',offset=curr_pos)
+        mmaped_data.shape = (number,spectral,spatial)
+        #extract the appropriate bands
+        for i in range(0,number,step):
+            if(i/step>=out_arr.shape[2]):
+                break
+            if update_arr:
+                update_arr[0]=int(i)
+                #check for poison pill
+                if update_arr[1]==-1:
+                    raise RuntimeError("I've been poisoned!")
+            for b,band in enumerate(bands):
+                out_arr[b,:,i//step]=mmaped_data[i,band-1,::step]
+        return out_arr[order,:,:]
 
-        for i in range(number):
-            #or iteratively load the file into memory
-            if readmode=='lines':
-                #fread the chunk with the right bands - current winner
-                hyspex_f.seek(2*(bands[0]-1)*spatial,os.SEEK_CUR)
-                if(i%100==0):
-                    if update_arr:
-                        update_arr[0]=i
-                    print("Reading line %d at position %d"%(i,hyspex_f.tell()))
-                line = np.fromfile(hyspex_f,'uint16',(spatial)*(bands[-1]-bands[0]+1))
-                for b,band in enumerate(bands):
-                    out_arr[b,:,i] = line[(band-bands[0])*spatial:(band-bands[0]+1)*spatial]
-                hyspex_f.seek(2*(final_step)*spatial,os.SEEK_CUR)
-
-            elif readmode=='bands':
-                #seek around the line to get the right bands
-                for b,step in enumerate(band_cycle):
-                    pos = hyspex_f.seek(2*(step)*spatial,os.SEEK_CUR)
-                    if(i%100==0):print(pos,end=', ')
-                    out_arr[b,:,i] = np.fromfile(hyspex_f,'uint16',spatial)
-                if(i%100==0):print()    
-                hyspex_f.seek(2*(final_step)*spatial,os.SEEK_CUR)
-        hyspex_f.close()
-        return out_arr[::-1,:,:]
-    else:
-        out_arr = np.zeros([spatial,number],dtype='uint16')
-        print(number)
-        for i in range(number):
-            if(i%100==0):print("Reading line %d"%i,end=' ')
-            if i==0:
-               pos= hyspex_f.seek(2*spatial*(bands-1),os.SEEK_CUR)
-               print("At position %d"%pos)
-            else:
-                pos = hyspex_f.seek(2*(spectral-1)*spatial,os.SEEK_CUR)
-                if(i%100==0):print("At position %d"%pos)
-            out_arr[:,i] = np.fromfile(hyspex_f,'uint16',spatial)    
-        hyspex_f.close()
-        return out_arr
-
-def processBand(band,idx):
+def processVNIRBand(band,idx):
     #adjust band to appear as true-color as possible
     band = band.astype('float32')
     old_max = band.max()
     band *= [5.,5.,7.][idx]
     band[band>old_max] = old_max
     return band
+def processSWIRBand(band,idx):
+    band = band.astype('float32')
+    old_max = band.max()
+    band *= [1.5,1.5,1.5][idx]
+    band[band>old_max] = old_max
+    return band
+    
 
-def toGeoTiff(fname,rgb_arr):
+PROCESS_FUNCTIONS = {
+        'VNIR':processVNIRBand,
+        'SWIR':processSWIRBand,
+}
+def toGeoTiff(fname,rgb_arr,wlens="VNIR"):
     bands,rows,cols = rgb_arr.shape
     arr_8bit = np.empty([rows,cols,bands],dtype='uint8')
     for b in range(bands):
-        pband = processBand(rgb_arr[b,:,:],b)
+        pband = PROCESS_FUNCTIONS.get(wlens,lambda x,y:x)(rgb_arr[b,:,:],b)
         arr_8bit[:,:,b] = (pband//256).astype('uint8')
     im = Image.fromarray(arr_8bit,mode='RGB')
     im.save(fname)

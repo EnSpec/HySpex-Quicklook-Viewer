@@ -9,7 +9,10 @@ import os
 import math
 from FileNavigator import FileNavigator
 
-BANDS = [75,46,19]
+BANDS = {
+    "VNIR":[75,46,19],
+    "SWIR":[50,130,220]
+}
 DRIVE = 'R:\\'
 def HyspexParser(tQ,rQ,arr):
     """Function for multiprocess that converts hyspex files to TIFFs,
@@ -22,9 +25,12 @@ def HyspexParser(tQ,rQ,arr):
             break
         #expects a 3-tuple of 2 strings and an int
         fname,out_fname,step = task
+        wlens = "VNIR" if "VNIR" in fname else "SWIR"
+        if wlens == "SWIR":
+            step = max(int(step/3),1)
         try:
-            data = readlines_gdal.readBIL(fname,BANDS[::-1],readmode='mmap',update_arr=arr,step=step)
-            readlines_gdal.toGeoTiff(out_fname,data)
+            data = readlines_gdal.readBIL(fname,BANDS[wlens],readmode='mmap',update_arr=arr,step=step)
+            readlines_gdal.toGeoTiff(out_fname,data,wlens)
             rQ.put("OK")
         except RuntimeError:
             rQ.put("NOK")
