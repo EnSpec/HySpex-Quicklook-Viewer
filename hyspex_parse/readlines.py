@@ -44,28 +44,30 @@ def readBIL(fname,orig_bands,readmode='lines',update_arr = None,step=1):
                 out_arr[b,:,i//step]=mmaped_data[i,band-1,::step]
         return out_arr[order,:,:]
 
-def processVNIRBand(band,idx):
+def processBand(band,idx):
     #adjust band to appear as true-color as possible
     band = band.astype('float32')
-    old_max = band.max()
-    band *= [5.,5.,7.][idx]
-    band[band>old_max] = old_max
+    lo_bound, hi_bound = np.percentile(band,[5,95])
+    print(lo_bound,hi_bound)
+    band[band < lo_bound] = lo_bound
+    band[band > hi_bound] = hi_bound
+    stretch = ((1<<16)-1)/(hi_bound-lo_bound)
+    band -= lo_bound
+    band *= stretch
+    #old_max = band.max()
+    #band *= [5.,5.,7.][idx]
+    #band[band>old_max] = old_max
     return band
-def processSWIRBand(band,idx):
-    band = band.astype('float32')
-    old_max = band.max()
-    band *= [1.5,1.5,1.5][idx]
-    band[band>old_max] = old_max
-    return band
-    
+
 
 PROCESS_FUNCTIONS = {
-        'VNIR':processVNIRBand,
-        'SWIR':processSWIRBand,
+        'VNIR':processBand,
+        'SWIR':processBand,
 }
 def toGeoTiff(fname,rgb_arr,wlens="VNIR"):
     bands,rows,cols = rgb_arr.shape
     arr_8bit = np.empty([rows,cols,bands],dtype='uint8')
+    #float_arr = processPercentile(rgb_arr)
     for b in range(bands):
         pband = PROCESS_FUNCTIONS.get(wlens,lambda x,y:x)(rgb_arr[b,:,:],b)
         arr_8bit[:,:,b] = (pband//256).astype('uint8')

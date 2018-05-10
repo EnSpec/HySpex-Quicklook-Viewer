@@ -13,7 +13,7 @@ BANDS = {
     "VNIR":[75,46,19],
     "SWIR":[50,130,220]
 }
-DRIVE = 'R:\\'
+DRIVES = "D:\\","R:\\","C:\\"
 def HyspexParser(tQ,rQ,arr):
     """Function for multiprocess that converts hyspex files to TIFFs,
     while providing updates on its current progress to its parent
@@ -101,7 +101,7 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.changeLoadScale(0)
         self.pixmap=None
         #File Navigator for auto-detecting new files
-        self.fn = FileNavigator(DRIVE)
+        self.fn = FileNavigator(DRIVES)
         self.defaultDrive.addItems(self.fn._drives)
         self.defaultDrive.setCurrentIndex(self.fn._drives.index(self.fn._drive))
         self.defaultDrive.currentIndexChanged.connect(self.changeDrive);
@@ -159,16 +159,17 @@ class QuickLookApp(QtWidgets.QMainWindow,graphics_app_ui.Ui_MainWindow):
         self.fileLabel.setText("Searching drive {}".format(self.fn._drive))
         try:
             fname = self.fn.findLatest('.*VNIR.*hyspex$')
+            self.askFile(fname)
         except:
             self.fileLabel.setStyleSheet('color: red')
             self.fileLabel.setText("Error: No hyspex files found on drive {}".format(self.fn._drive))
         finally:
             self.spinLabel.setHidden(True)
-        self.askFile(fname)
 
     def askFile(self,fname=None):
         if not fname:
-            fname,_ = QtWidgets.QFileDialog.getOpenFileName(self)
+            fname,_ = QtWidgets.QFileDialog.getOpenFileName(self,directory = self.fn._drive,
+                    filter="Hyspex Files (*.hyspex)")
         if(fname):
             name,ext = os.path.splitext(fname)
             #check for a hyspex file - it will need to be processed

@@ -7,14 +7,17 @@ except ImportError:
     print("Error: Expected Windows-based Filesystem")
     sys.exit(1)
 
-DRIVE = "R:\\"
+DRIVES = "D:\\","R:\\","C:\\"
 class FileNavigator(object):
-    def __init__(self,drive):
+    def __init__(self,drives):
         #get all accessible drive letters
         self._drives = win32api.GetLogicalDriveStrings().split('\000')[:-1]
-        if drive in self._drives:
-            self._drive = drive
-        else:
+        self._drive = None
+        for drive in drives:
+            if drive in self._drives:
+                self._drive = drive
+            break
+        if self._drive is None:
             self._drive = self._drives[0]
 
     def findLatest(self,matches='.*',path=None,max_depth=2):
@@ -23,7 +26,7 @@ class FileNavigator(object):
         if path is None:
             path = self._drive
         self._find_latest(matches,path,max_depth,1)
-        return min(self.matching_files,key=os.path.getmtime)
+        return max(self.matching_files,key=os.path.getmtime)
 
     def setDrive(self,drive):
         if drive in self._drives:
@@ -58,5 +61,5 @@ class FileNavigator(object):
 
 
 if __name__=='__main__':
-    f = FileNavigator(DRIVE)
+    f = FileNavigator(DRIVES)
     print(f.findLatest('.*VNIR.*hyspex$'))
